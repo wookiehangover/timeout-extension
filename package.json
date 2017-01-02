@@ -1,5 +1,5 @@
 {
-  "name": "timeout-extension",
+  "name": "timeout",
   "private": true,
   "scripts": {
     "build": "gulp"

@@ -3,6 +3,8 @@
 import { parse } from 'url'
 import timeago from 'timeago.js'
 
+const { get, set, remove } = chrome.storage.sync
+
 const headlines = [
   `How much of a break do you need?`,
   `Let's give it a rest for now`,
@@ -14,7 +16,7 @@ const headlines = [
 const form = document.getElementById('form')
 const time = document.getElementById('time')
 const blocked = document.getElementById('blocked')
-const unblock = document.getElementById('unblock')
+const disable = document.getElementById('unblock')
 const headline = document.getElementById('headline')
 
 headline.innerHTML = headlines[Math.floor(Math.random() * headlines.length)]
@@ -25,33 +27,46 @@ function toggle() {
 }
 
 function update(value) {
-  chrome.storage.sync.set(value, () => {
+  set(value, () => {
     console.log('updated')
     setTimeout(() => chrome.tabs.reload(), 100)
+    chrome.browserAction.setIcon({ path: 'images/icon-active-38.png' })
     toggle()
   })
 }
 
+function unblock(hostname) {
+  remove(hostname, () => {
+    toggle()
+    chrome.browserAction.setIcon({ path: 'images/icon-38.png' })
+    setTimeout(() => chrome.tabs.reload(), 100)
+  })
+}
+
+
 chrome.tabs.query({ active: true, currentWindow: true }, tabCollection => {
   const tab = tabCollection[0]
   if (!tab) return
-  const url = parse(tab.url)
-  if (!url) return // TODO: close the popup if this fails
+  const { hostname } = parse(tab.url)
+  if (!hostname) return // TODO: close the popup if this fails
 
+  // Add the Hostname to the DOM
   Array.from(document.querySelectorAll('.domain')).forEach(node => {
-    node.innerHTML += `<span class="underline">${url.hostname}</span>`
+    node.innerHTML += `<span class="underline">${hostname}</span>`
   })
 
-  chrome.storage.sync.get(items => {
+  // Toggle the tap if the current Host is in timeout
+  get(items => {
     for (let host in items) {
       const timeout = parseInt(items[host], 10)
-      if (host === url.hostname && (timeout === 0 || Date.now() < timeout)) {
+      if (host === hostname && (timeout === 0 || Date.now() < timeout)) {
         toggle()
         time.innerHTML = new timeago().format(timeout)
       }
     }
   })
 
+  // Save the form value on submit
   form.addEventListener('submit', event => {
     event.preventDefault()
     const { value } = Array.from(
@@ -64,15 +79,13 @@ chrome.tabs.query({ active: true, currentWindow: true }, tabCollection => {
       time.innerHTML = new timeago().format(duration)
     }
 
-    update({ [ url.hostname ]: duration })
+    update({ [ hostname ]: duration })
   }, false)
 
-  unblock.addEventListener('click', event => {
+  // Turn off blocking when you click the button
+  disable.addEventListener('click', event => {
     event.preventDefault()
-    chrome.storage.sync.remove(url.hostname, function() {
-      toggle()
-      setTimeout(() => chrome.tabs.reload(), 100)
-    })
+    unblock(hostname)
   }, false)
 
 })
